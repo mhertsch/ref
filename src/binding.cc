@@ -2,9 +2,9 @@
 #include <string.h>
 #include <errno.h>
 
-//#include "node.h"
-//#include "node_buffer.h"
-#include "nan.h"
+#include <node.h>
+#include <node_buffer.h>
+#include <nan.h>
 
 #ifdef _WIN32
   #define __alignof__ __alignof
