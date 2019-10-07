@@ -157,144 +157,6 @@ inline Local<Value> WrapNullPointer() {
 }
 
 /*
- * Retreives a JS Object instance that was previously stored in
- * the given Buffer instance at the given offset.
- *
- * info[0] - Buffer - the "buf" Buffer instance to read from
- * info[1] - Number - the offset from the "buf" buffer's address to read from
- */
-
-NAN_METHOD(ReadObject) {
-
-  Local<Value> buf = info[0];
-  if (!Buffer::HasInstance(buf)) {
-    return Nan::ThrowTypeError("readObject: Buffer instance expected");
-  }
-
-  int64_t offset = GetInt64(info[1]);
-  char *ptr = Buffer::Data(buf.As<Object>()) + offset;
-
-  if (ptr == NULL) {
-    return Nan::ThrowError("readObject: Cannot read from NULL pointer");
-  }
-
-  Persistent<Object>* prtn = reinterpret_cast<Persistent<Object>*>(ptr);
-  Local<Value> rtn = Nan::New(*prtn);
-  info.GetReturnValue().Set(rtn);
-}
-
-/*
- * Callback function for when the weak persistent object from WriteObject
- * gets garbage collected. We just have to dispose of our weak reference now.
- */
-
-void write_object_cb(const Nan::WeakCallbackInfo<void>& data) {
-  //fprintf(stderr, "write_object_cb\n");
-  //NanDisposePersistent(data.GetValue());
-}
-
-/*
- * Writes a Persistent reference to given Object to the given Buffer
- * instance and offset.
- *
- * info[0] - Buffer - the "buf" Buffer instance to write to
- * info[1] - Number - the offset from the "buf" buffer's address to write to
- * info[2] - Object - the "obj" Object which will have a new Persistent reference
- *                    created for the obj, who'se memory address will be written
- * info[3] - Boolean - `false` by default. if `true` is passed in then a
- *                    persistent reference will be written to the Buffer instance.
- *                    A weak reference gets written by default.
- */
-
-NAN_METHOD(WriteObject) {
-
-  Local<Value> buf = info[0];
-  if (!Buffer::HasInstance(buf)) {
-    return Nan::ThrowTypeError("writeObject: Buffer instance expected");
-  }
-
-  int64_t offset = GetInt64(info[1]);
-  char *ptr = Buffer::Data(buf.As<Object>()) + offset;
-
-  Nan::Persistent<Object>* pptr = reinterpret_cast<Nan::Persistent<Object>*>(ptr);
-  Local<Object> val = info[2].As<Object>();
-
-  bool persistent = info[3]->BooleanValue();
-  if (persistent) {
-      (*pptr).Reset(val);
-  } else {
-    void *user_data = NULL;
-    Nan::Persistent<Object> p2(val);
-    p2.SetWeak(user_data, write_object_cb, Nan::WeakCallbackType::kParameter);
-    memcpy(pptr, &p2, sizeof(Nan::Persistent<Object>));
-  }
-
-  info.GetReturnValue().SetUndefined();
-}
-
-/*
- * Reads the memory address of the given "buf" pointer Buffer at the specified
- * offset, and returns a new SlowBuffer instance from the memory address stored.
- *
- * info[0] - Buffer - the "buf" Buffer instance to read from
- * info[1] - Number - the offset from the "buf" buffer's address to read from
- * info[2] - Number - the length in bytes of the returned SlowBuffer instance
- */
-
-NAN_METHOD(ReadPointer) {
-
-  Local<Value> buf = info[0];
-  if (!Buffer::HasInstance(buf)) {
-    return Nan::ThrowTypeError("readPointer: Buffer instance expected as first argument");
-  }
-
-  int64_t offset = GetInt64(info[1]);
-  char *ptr = Buffer::Data(buf.As<Object>()) + offset;
-  size_t size = info[2]->Uint32Value();
-
-  if (ptr == NULL) {
-    return Nan::ThrowError("readPointer: Cannot read from NULL pointer");
-  }
-
-  char *val = *reinterpret_cast<char **>(ptr);
-  info.GetReturnValue().Set(WrapPointer(val, size));
-}
-
-/*
- * Writes the memory address of the "input" buffer (and optional offset) to the
- * specified "buf" buffer and offset. Essentially making "buf" hold a reference
- * to the "input" Buffer.
- *
- * info[0] - Buffer - the "buf" Buffer instance to write to
- * info[1] - Number - the offset from the "buf" buffer's address to write to
- * info[2] - Buffer - the "input" Buffer whose memory address will be written
- */
-
-NAN_METHOD(WritePointer) {
-
-  Local<Value> buf = info[0];
-  Local<Value> input = info[2];
-  if (!Buffer::HasInstance(buf)) {
-    return Nan::ThrowTypeError("writePointer: Buffer instance expected as first argument");
-  }
-  if (!(input->IsNull() || Buffer::HasInstance(input))) {
-    return Nan::ThrowTypeError("writePointer: Buffer instance expected as third argument");
-  }
-
-  int64_t offset = GetInt64(info[1]);
-  char *ptr = Buffer::Data(buf.As<Object>()) + offset;
-
-  if (input->IsNull()) {
-    *reinterpret_cast<char **>(ptr) = NULL;
-  } else {
-    char *input_ptr = Buffer::Data(input.As<Object>());
-    *reinterpret_cast<char **>(ptr) = input_ptr;
-  }
-
-  info.GetReturnValue().SetUndefined();
-}
-
-/*
  * Reads a machine-endian int64_t from the given Buffer at the given offset.
  *
  * info[0] - Buffer - the "buf" Buffer instance to read from
@@ -468,107 +330,6 @@ NAN_METHOD(WriteUInt64) {
   info.GetReturnValue().SetUndefined();
 }
 
-/*
- * Reads a Utf8 C String from the given pointer at the given offset (or 0).
- * I didn't want to add this function but it ends up being necessary for reading
- * past a 0 or 1 length Buffer's boundary in node-ffi :\
- *
- * info[0] - Buffer - the "buf" Buffer instance to read from
- * info[1] - Number - the offset from the "buf" buffer's address to read from
- */
-
-NAN_METHOD(ReadCString) {
-
-  Local<Value> buf = info[0];
-  if (!Buffer::HasInstance(buf)) {
-    return Nan::ThrowTypeError("readCString: Buffer instance expected");
-  }
-
-  int64_t offset = GetInt64(info[1]);
-  char *ptr = Buffer::Data(buf.As<Object>()) + offset;
-
-  if (ptr == NULL) {
-    return Nan::ThrowError("readCString: Cannot read from NULL pointer");
-  }
-
-  Local<Value> rtn = Nan::New<v8::String>(ptr).ToLocalChecked();
-  info.GetReturnValue().Set(rtn);
-}
-
-/*
- * Returns a new Buffer instance that has the same memory address
- * as the given buffer, but with the specified size.
- *
- * info[0] - Buffer - the "buf" Buffer instance to read the address from
- * info[1] - Number - the size in bytes that the returned Buffer should be
- * info[2] - Number - the offset from the "buf" buffer's address to read from
- */
-
-NAN_METHOD(ReinterpretBuffer) {
-
-  Local<Value> buf = info[0];
-  if (!Buffer::HasInstance(buf)) {
-    return Nan::ThrowTypeError("reinterpret: Buffer instance expected");
-  }
-
-  int64_t offset = GetInt64(info[2]);
-  char *ptr = Buffer::Data(buf.As<Object>()) + offset;
-
-  if (ptr == NULL) {
-    return Nan::ThrowError("reinterpret: Cannot reinterpret from NULL pointer");
-  }
-
-  size_t size = info[1]->Uint32Value();
-
-  info.GetReturnValue().Set(WrapPointer(ptr, size));
-}
-
-/*
- * Returns a new Buffer instance that has the same memory address
- * as the given buffer, but with a length up to the first aligned set of values of
- * 0 in a row for the given length.
- *
- * info[0] - Buffer - the "buf" Buffer instance to read the address from
- * info[1] - Number - the number of sequential 0-byte values that need to be read
- * info[2] - Number - the offset from the "buf" buffer's address to read from
- */
-
-NAN_METHOD(ReinterpretBufferUntilZeros) {
-
-  Local<Value> buf = info[0];
-  if (!Buffer::HasInstance(buf)) {
-    return Nan::ThrowTypeError("reinterpretUntilZeros: Buffer instance expected");
-  }
-
-  int64_t offset = GetInt64(info[2]);
-  char *ptr = Buffer::Data(buf.As<Object>()) + offset;
-
-  if (ptr == NULL) {
-    return Nan::ThrowError("reinterpretUntilZeros: Cannot reinterpret from NULL pointer");
-  }
-
-  uint32_t numZeros = info[1]->Uint32Value();
-  uint32_t i = 0;
-  size_t size = 0;
-  bool end = false;
-
-  while (!end && size < kMaxLength) {
-    end = true;
-    for (i = 0; i < numZeros; i++) {
-      if (ptr[size + i] != 0) {
-        end = false;
-        break;
-      }
-    }
-    if (!end) {
-      size += numZeros;
-    }
-  }
-
-  info.GetReturnValue().Set(WrapPointer(ptr, size));
-}
-
-
 } // anonymous namespace
 
 NAN_MODULE_INIT(init) {
@@ -605,8 +366,6 @@ NAN_MODULE_INIT(init) {
   SET_SIZEOF(pointer, char *);
   SET_SIZEOF(size_t, size_t);
   SET_SIZEOF(wchar_t, wchar_t);
-  // size of a Persistent handle to a JS object
-  SET_SIZEOF(Object, Nan::Persistent<Object>);
 
   // "alignof" map
   Local<Object> amap = Nan::New<v8::Object>();
@@ -637,7 +396,6 @@ NAN_MODULE_INIT(init) {
   SET_ALIGNOF(pointer, char *);
   SET_ALIGNOF(size_t, size_t);
   SET_ALIGNOF(wchar_t, wchar_t);
-  SET_ALIGNOF(Object, Nan::Persistent<Object>);
 
   // exports
   target->Set(Nan::New<v8::String>("sizeof").ToLocalChecked(), smap);
@@ -647,16 +405,9 @@ NAN_MODULE_INIT(init) {
   Nan::SetMethod(target, "address", Address);
   Nan::SetMethod(target, "hexAddress", HexAddress);
   Nan::SetMethod(target, "isNull", IsNull);
-  Nan::SetMethod(target, "readObject", ReadObject);
-  Nan::SetMethod(target, "writeObject", WriteObject);
-  Nan::SetMethod(target, "readPointer", ReadPointer);
-  Nan::SetMethod(target, "writePointer", WritePointer);
   Nan::SetMethod(target, "readInt64", ReadInt64);
   Nan::SetMethod(target, "writeInt64", WriteInt64);
   Nan::SetMethod(target, "readUInt64", ReadUInt64);
   Nan::SetMethod(target, "writeUInt64", WriteUInt64);
-  Nan::SetMethod(target, "readCString", ReadCString);
-  Nan::SetMethod(target, "reinterpret", ReinterpretBuffer);
-  Nan::SetMethod(target, "reinterpretUntilZeros", ReinterpretBufferUntilZeros);
 }
 NODE_MODULE(binding, init);
