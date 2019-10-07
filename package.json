@@ -1,14 +1,11 @@
 {
   "name": "ref",
-  "description": "Turn Buffer instances into \"pointers\"",
+  "description": "Adds int64 support to Buffer instances",
   "keywords": [
     "native",
     "buffer",
     "extensions",
     "c++",
-    "pointer",
-    "reference",
-    "dereference",
     "type",
     "int",
     "long",
@@ -26,7 +23,7 @@
   },
   "main": "./lib/ref.js",
   "scripts": {
-    "test": "mocha --expose-gc --reporter spec --use_strict"
+    "test": "mocha --reporter spec --use_strict"
   },
   "dependencies": {
     "bindings": "1",
